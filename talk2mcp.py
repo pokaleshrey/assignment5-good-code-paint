@@ -15,7 +15,7 @@ load_dotenv()
 api_key = os.getenv("GEMINI_API_KEY")
 client = genai.Client(api_key=api_key)
 
-max_iterations = 4
+max_iterations = 5
 last_response = None
 iteration = 0
 iteration_response = []
@@ -161,7 +161,7 @@ Your entire response should be a single line JSON format , no newlines or spaces
 
                     # Get model's response with timeout
                     print("Preparing to generate LLM response...")
-                    prompt = f"{system_prompt}\n\nQuery: {current_query}.  What should I do next ? "
+                    prompt = f"{system_prompt}\n\nQuery: {current_query}\n\nWhat should I do next ? "
                     print(f"Prompt: {prompt}")
                     try:
                         response = await generate_with_timeout(client, prompt)
