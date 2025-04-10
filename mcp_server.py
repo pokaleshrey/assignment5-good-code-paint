@@ -2,7 +2,6 @@
 from mcp.server.fastmcp import FastMCP, Image
 from mcp.server.fastmcp.prompts import base
 from mcp.types import TextContent
-from mcp import types
 from PIL import Image as PILImage
 import math
 import sys
@@ -10,7 +9,9 @@ from pywinauto.application import Application
 import win32gui
 import win32con
 import time
-from win32api import GetSystemMetrics
+import subprocess
+import pygetwindow as gw
+import time
 
 # instantiate an MCP server client
 mcp = FastMCP("Calculator")
@@ -280,17 +281,17 @@ async def add_text_in_paint(text: str, x1: int, y1: int) -> dict:
 async def open_paint() -> dict:
     """Open Microsoft Paint maximized on primary monitor"""
     global paint_app
+
     try:
         paint_app = Application().start('mspaint.exe')
-        time.sleep(0.2)
-        
+        time.sleep(1)
         # Get the Paint window
         paint_window = paint_app.window(class_name='MSPaintApp')
-        
+
         # Maximize the window on primary monitor
         win32gui.ShowWindow(paint_window.handle, win32con.SW_MAXIMIZE)
-        time.sleep(0.2)
-        
+        time.sleep(1)
+
         return {
             "content": [
                 TextContent(

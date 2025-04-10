@@ -6,6 +6,7 @@ import asyncio
 from google import genai
 from concurrent.futures import TimeoutError
 from functools import partial
+import json
 
 # Load environment variables from .env file
 load_dotenv()
@@ -14,7 +15,7 @@ load_dotenv()
 api_key = os.getenv("GEMINI_API_KEY")
 client = genai.Client(api_key=api_key)
 
-max_iterations = 6
+max_iterations = 4
 last_response = None
 iteration = 0
 iteration_response = []
@@ -76,17 +77,12 @@ async def main():
 
                 # Create system prompt with available tools
                 print("Creating system prompt...")
-                print(f"Number of tools: {len(tools)}")
                 
                 try:
-                    # First, let's inspect what a tool object looks like
-                    # if tools:
-                    #     print(f"First tool properties: {dir(tools[0])}")
-                    #     print(f"First tool example: {tools[0]}")
-                    
                     tools_description = []
                     for i, tool in enumerate(tools):
                         try:
+                            #print(tool)
                             # Get tool properties
                             params = tool.inputSchema
                             desc = getattr(tool, 'description', 'No description available')
@@ -117,6 +113,13 @@ async def main():
                 
                 print("Created system prompt...")
                 
+                function_call = '{"type": "FUNCTION_CALL", "name": "function_name", "parameters": [param1, param2, ...]}'
+                final_answer = '{"type": "FINAL_ANSWER", "final_answer": "number"}'
+                
+                example_line1 = '{"type": "FUNCTION_CALL", "name": "add", "parameters": [5, 3]}'
+                example_line2 = '{"type": "FUNCTION_CALL", "name": "strings_to_chars_to_int", "parameters": [\'INDIA\']}'
+                example_line3 = '{"type": "FINAL_ANSWER", "final_answer": "[42]"}'
+
                 system_prompt = f"""You are a math agent solving problems in iterations. You have access to various mathematical tools.
 
 Available tools:
@@ -124,23 +127,23 @@ Available tools:
 
 You must respond with EXACTLY ONE line in one of these formats (no additional text):
 1. For function calls:
-   FUNCTION_CALL: function_name|param1|param2|...
+   {function_call}
    
 2. For final answers:
-   FINAL_ANSWER: [number]
+   {final_answer}
 
 Important:
-- When a function returns multiple values, you need to process all of them
-- Only give FINAL_ANSWER when you have completed all necessary calculations
-- Do not repeat function calls with the same parameters
+- When a function_call returns multiple values, you need to process all of them
+- Only give final_answer when you have completed all necessary calculations
+- Do not repeat function_call with the same parameters
 
 Examples:
-- FUNCTION_CALL: add|5|3
-- FUNCTION_CALL: strings_to_chars_to_int|INDIA
-- FINAL_ANSWER: [42]
+- {example_line1}
+- {example_line2}
+- {example_line3}
 
 DO NOT include any explanations or additional text.
-Your entire response should be a single line starting with either FUNCTION_CALL: or FINAL_ANSWER:"""
+Your entire response should be a single line JSON format , no newlines or spaces"""
 
                 query = """Find the ASCII values of characters in INDIA and then return sum of exponentials of those values. Once this is done, Inside MSPaint app, draw a rectangle (200,300,800,800) and write the final answer inside this rectangle."""
 
@@ -155,37 +158,26 @@ Your entire response should be a single line starting with either FUNCTION_CALL:
                         current_query = query
                     else:
                         current_query = current_query + "\n\n" + " ".join(iteration_response)
-                        current_query = current_query + "  What should I do next?"
 
                     # Get model's response with timeout
                     print("Preparing to generate LLM response...")
-                    prompt = f"{system_prompt}\n\nQuery: {current_query}"
+                    prompt = f"{system_prompt}\n\nQuery: {current_query}.  What should I do next ? "
+                    print(f"Prompt: {prompt}")
                     try:
                         response = await generate_with_timeout(client, prompt)
-                        response_text = response.text.strip()
+                        response_text = json.loads(response.text.strip())
                         print(f"LLM Response: {response_text}")
-                        
-                        # Find the FUNCTION_CALL line in the response
-                        for line in response_text.split('\n'):
-                            line = line.strip()
-                            if line.startswith("FUNCTION_CALL:"):
-                                response_text = line
-                                break
                         
                     except Exception as e:
                         print(f"Failed to get LLM response: {e}")
                         break
 
-
-                    if response_text.startswith("FUNCTION_CALL:"):
-                        _, function_info = response_text.split(":", 1)
-                        parts = [p.strip() for p in function_info.split("|")]
-                        func_name, params = parts[0], parts[1:]
+                    if response_text['type'] == "FUNCTION_CALL":
+                        func_name = response_text['name']
+                        params = response_text['parameters']
                         
-                        print(f"\nDEBUG: Raw function info: {function_info}")
-                        print(f"DEBUG: Split parts: {parts}")
                         print(f"DEBUG: Function name: {func_name}")
-                        print(f"DEBUG: Raw parameters: {params}")
+                        print(f"DEBUG: Parameters: {params}")
                         
                         try:
                             # Find the matching tool to get its input schema
@@ -218,9 +210,10 @@ Your entire response should be a single line starting with either FUNCTION_CALL:
                                     arguments[param_name] = float(value)
                                 elif param_type == 'array':
                                     # Handle array input
+                                    print(f"DEBUG: Converting string to array: {value}")
                                     if isinstance(value, str):
-                                        value = value.strip('[]').split(',')
-                                    arguments[param_name] = [int(x.strip()) for x in value]
+                                        value = value.strip('[]')
+                                    arguments[param_name] = [int(x) for x in value]
                                 else:
                                     arguments[param_name] = str(value)
 
@@ -253,6 +246,7 @@ Your entire response should be a single line starting with either FUNCTION_CALL:
                             else:
                                 result_str = str(iteration_result)
                             
+                            iteration_response = []
                             iteration_response.append(
                                 f"In the {iteration + 1} iteration you called {func_name} with {arguments} parameters, "
                                 f"and the function returned {result_str}."
@@ -267,34 +261,8 @@ Your entire response should be a single line starting with either FUNCTION_CALL:
                             iteration_response.append(f"Error in iteration {iteration + 1}: {str(e)}")
                             break
 
-                    elif response_text.startswith("FINAL_ANSWER:"):
+                    elif response_text['type'] == "FINAL_ANSWER":
                         print("\n=== Agent Execution Complete ===")
-                        # result = await session.call_tool("open_paint")
-                        # print(result.content[0].text)
-
-                        # # Wait longer for Paint to be fully maximized
-                        # await asyncio.sleep(1)
-
-                        # # Draw a rectangle
-                        # result = await session.call_tool(
-                        #     "draw_rectangle",
-                        #     arguments={
-                        #         "x1": 225,
-                        #         "y1": 300,
-                        #         "x2": 800,
-                        #         "y2": 800
-                        #     }
-                        # )
-                        # print(result.content[0].text)
-
-                        # # Draw rectangle and add text
-                        # result = await session.call_tool(
-                        #     "add_text_in_paint",
-                        #     arguments={
-                        #         "text": response_text
-                        #     }
-                        # )
-                        # print(result.content[0].text)
                         break
 
                     iteration += 1
