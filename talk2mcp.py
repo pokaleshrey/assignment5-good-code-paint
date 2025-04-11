@@ -7,10 +7,6 @@ from google import genai
 from concurrent.futures import TimeoutError
 
 import json
-from rich.console import Console
-from rich.panel import Panel
-from rich.table import Table
-from rich import box
 
 # Load environment variables from .env file
 load_dotenv()
@@ -19,7 +15,7 @@ load_dotenv()
 api_key = os.getenv("GEMINI_API_KEY")
 client = genai.Client(api_key=api_key)
 
-max_iterations = 10
+max_iterations = 15
 last_response = None
 iteration = 0
 iteration_response = []
@@ -115,11 +111,21 @@ async def main():
                 function_call = '{"type": "FUNCTION_CALL", "name": "function_name", "parameters": [param1, param2, ...], "reasoning_type": "type_of_reasoning"}'
                 final_answer = '{"type": "FINAL_ANSWER", "final_answer": "number", "reasoning_type": "type_of_reasoning"}'
                 
-                example_line1 = '{"type": "FUNCTION_CALL", "name": "add", "parameters": [5, 3],"reasoning_type":"arithmetic"}}'
-                example_line2 = '{"type": "FUNCTION_CALL", "name": "strings_to_chars_to_int", "parameters": [\'INDIA\'], "reasoning_type":"lookup"}'
-                example_line3 = '{"type": "FINAL_ANSWER", "final_answer": "[42]", "reasoning_type":"control"}'
-                example_line4 = '{"type": "FUNCTION_CALL", "name": "show_reasoning", "parameters": [["Convert \'INDIA\' to ASCII values", "Apply exponential function to each ASCII value", "Sum all exponential values", "Draw a rectangle from (200,300) to (800,800)"]], "reasoning_type": "control"}'
-
+                example_step1 = 'User: Find the ASCII values of characters in INDIA and then return sum of exponentials of those values.'
+                example_step2 = 'Assistant: {\'type\': \'FUNCTION_CALL\', \'name\': \'show_reasoning\', \'parameters\': [["Convert \'INDIA\' to ASCII values", \'Sum all exponential values\', \'Draw a rectangle from (200,300) to (800,800)\']], \'reasoning_type\': \'control\'}'
+                example_step3 = 'User: What should i do next?'
+                example_step4 = '\'Assistant: {\'type\': \'FUNCTION_CALL\', \'name\': \'strings_to_chars_to_int\', \'parameters\': [\'INDIA\'], \'reasoning_type\': \'lookup\'}'
+                example_step5 = 'Result is [\'73\', \'78\', \'68\', \'73\', \'65\']. Lets Verify this step.'
+                example_step6 = 'Assistant: {\'type\': \'FUNCTION_CALL\', \'name\': \'verify_string_to_int\', \'parameters\': [\'INDIA\', [73, 78, 68, 73, 65]]}'
+                example_step7 = 'User: True received hence verified. What should i do next'
+                example_step8 = 'Assistant: {\'type\': \'FUNCTION_CALL\', \'name\': \'int_list_to_exponential_sum\', \'parameters\': [[73, 78, 68, 73, 65]], \'reasoning_type\': \'arithmetic\'}'
+                example_step9 = 'Result is [73, 78, 68, 73, 65]. Lets Verify this step.'
+                example_step10 = 'Assistant: {\'type\': \'FUNCTION_CALL\', \'name\': \'verify_int_to_exponential_sum\', \'parameters\': [\'[73, 78, 68, 73, 65]\', \'7.59982224609308e+33\']}'
+                example_step11 = 'User: True received hence verified. What should i do next'
+                example_step12 = 'Assistant: {\'type\': \'FUNCTION_CALL\', \'name\': \'open_paint\', \'parameters\': [], \'reasoning_type\': \'drawing\'}'
+                example_step13 = 'Result is \'Paint opened successfully and maximized\'. Lets Verify this step.'
+                example_step14 = 'Assistant: {\'type\': \'FUNCTION_CALL\', \'name\': \'verify_open_paint\', \'parameters\': []}'
+                example_step15 = 'User: True received hence verified. What should i do next'
 
                 system_prompt = f"""You are a mathematical reasoning agent that solves problems step by step.
 You have access to various tools.
@@ -134,7 +140,8 @@ You must respond with EXACTLY ONE line in one of these formats (no additional te
 {final_answer}
 
 Instructions:
-- First Show the step-by-step reasoning process, then calculate and verify each step.
+- First Show the step-by-step reasoning process.
+- After each FUNCTION_CALL, Verify result of each FUNCTION_CALL.
 - Classify each step with "reasoning_type" (e.g., "lookup", "arithmetic", "trigonometric", "geometric", "string", "drawing", "control").
 - Verify each result before using it. If a function output looks incorrect or out of expected range, repeat the call or choose an alternative.
 - Before returning the final answer, re-calculate or cross-check it using a second method or sanity-check (e.g., check ranges, signs, or consistency).
@@ -149,13 +156,25 @@ Output Rules:
 - Do not include any explanations or additional text.
 
 Format Examples:
-- {example_line1}
-- {example_line2}
-- {example_line3}
-- {example_line4}
+- {example_step1}
+- {example_step2}
+- {example_step3}
+- {example_step4}
+- {example_step5}
+- {example_step6}
+- {example_step7}
+- {example_step8}
+- {example_step9}
+- {example_step10}
+- {example_step11}
+- {example_step12}
+- {example_step13}
+- {example_step14}
+- {example_step15}
+
 """
 
-                query = """Find the ASCII values of characters in INDIA and then return sum of exponentials of those values. Once this is done, Inside MSPaint app, draw a rectangle (200,300,800,800) and write the final answer inside this rectangle."""
+                query = """Find the ASCII values of characters in SHREYASH and then return sum of exponentials of those values. Once this is done, Inside MSPaint app, draw a rectangle (200,300,800,800) and write the final answer inside this rectangle."""
               
                 # Use global iteration variables
                 global iteration, last_response

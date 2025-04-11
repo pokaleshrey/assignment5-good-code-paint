@@ -35,6 +35,69 @@ def show_reasoning(steps: list) -> TextContent:
         text="Reasoning shown"
     )
 
+@mcp.tool()
+def verify_string_to_int(expression: str, expected: list) -> TextContent:
+    """Verify if conversion of string to int is correct"""
+    console.print("[blue]FUNCTION CALL:[/blue] verify()")
+    console.print(f"[blue]Verifying:[/blue] {expression} = {expected}")
+    try:
+        actual = strings_to_chars_to_int(expression)
+        is_correct = actual == expected
+        
+        if is_correct:
+            console.print(f"[green] Correct! ASCII values of '{expression}' = {expected}[/green]")
+        else:
+            console.print(f"[red] Incorrect! ASCII values of '{expression}' should be {actual}, got {expected}[/red]")
+            
+        return TextContent(
+            type="text",
+            text=str(is_correct)
+        )
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {str(e)}")
+        return TextContent(
+            type="text",
+            text=f"Error: {str(e)}"
+        )
+    
+@mcp.tool()
+def verify_int_to_exponential_sum(expression: list, expected: float) -> TextContent:
+    """Verify if int to exponential sum is correct"""
+    console.print("[blue]FUNCTION CALL:[/blue] verify()")
+    console.print(f"[blue]Verifying:[/blue] int to exponential sum({expression}) = {expected}")
+    try:
+        actual = int_list_to_exponential_sum(expression)
+        is_correct = abs(actual - float(expected)) < 1e-10
+        
+        if is_correct:
+            console.print(f"[green] Correct! sum of exp({expression}) = {expected}[/green]")
+        else:
+            console.print(f"[red] Incorrect! sum of exp({expression}) should be {actual}, got {expected}[/red]")
+            
+        return TextContent(
+            type="text",
+            text=str(is_correct)
+        )
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {str(e)}")
+        return TextContent(
+            type="text",
+            text=f"Error: {str(e)}"
+        )
+
+@mcp.tool()
+def verify_open_paint() -> TextContent:
+    """Verify if paint was correctly opened"""
+    console.print("[blue]FUNCTION CALL:[/blue] verify()")
+    
+    global paint_app
+    is_correct = True if paint_app is not None else False
+            
+    return TextContent(
+        type="text",
+        text=str(is_correct)
+    )
+
 #addition tool
 @mcp.tool()
 def add(a: int, b: int) -> int:
