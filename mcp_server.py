@@ -9,14 +9,31 @@ from pywinauto.application import Application
 import win32gui
 import win32con
 import time
-import subprocess
-import pygetwindow as gw
-import time
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+from rich import box
 
+console = Console()
 # instantiate an MCP server client
 mcp = FastMCP("Calculator")
 
 # DEFINE TOOLS
+
+@mcp.tool()
+def show_reasoning(steps: list) -> TextContent:
+    """Show the step-by-step reasoning process"""
+    console.print("[blue]FUNCTION CALL:[/blue] show_reasoning()")
+    for i, step in enumerate(steps, 1):
+        console.print(Panel(
+            f"{step}",
+            title=f"Step {i}",
+            border_style="cyan"
+        ))
+    return TextContent(
+        type="text",
+        text="Reasoning shown"
+    )
 
 #addition tool
 @mcp.tool()

@@ -5,8 +5,12 @@ from mcp.client.stdio import stdio_client
 import asyncio
 from google import genai
 from concurrent.futures import TimeoutError
-from functools import partial
+
 import json
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+from rich import box
 
 # Load environment variables from .env file
 load_dotenv()
@@ -15,7 +19,7 @@ load_dotenv()
 api_key = os.getenv("GEMINI_API_KEY")
 client = genai.Client(api_key=api_key)
 
-max_iterations = 6
+max_iterations = 10
 last_response = None
 iteration = 0
 iteration_response = []
@@ -70,19 +74,14 @@ async def main():
                 await session.initialize()
                 
                 # Get available tools
-                print("Requesting tool list...")
                 tools_result = await session.list_tools()
                 tools = tools_result.tools
                 print(f"Successfully retrieved {len(tools)} tools")
-
-                # Create system prompt with available tools
-                print("Creating system prompt...")
-                
+            
                 try:
                     tools_description = []
                     for i, tool in enumerate(tools):
                         try:
-                            #print(tool)
                             # Get tool properties
                             params = tool.inputSchema
                             desc = getattr(tool, 'description', 'No description available')
@@ -100,7 +99,7 @@ async def main():
 
                             tool_desc = f"{i+1}. {name}({params_str}) - {desc}"
                             tools_description.append(tool_desc)
-                            print(f"Added description for tool: {tool_desc}")
+                            #print(f"Added description for tool: {tool_desc}")
                         except Exception as e:
                             print(f"Error processing tool {i}: {e}")
                             tools_description.append(f"{i+1}. Error processing tool")
@@ -113,42 +112,51 @@ async def main():
                 
                 print("Created system prompt...")
                 
-                function_call = '{"type": "FUNCTION_CALL", "name": "function_name", "parameters": [param1, param2, ...]}'
-                final_answer = '{"type": "FINAL_ANSWER", "final_answer": "number"}'
+                function_call = '{"type": "FUNCTION_CALL", "name": "function_name", "parameters": [param1, param2, ...], "reasoning_type": "type_of_reasoning"}'
+                final_answer = '{"type": "FINAL_ANSWER", "final_answer": "number", "reasoning_type": "type_of_reasoning"}'
                 
-                example_line1 = '{"type": "FUNCTION_CALL", "name": "add", "parameters": [5, 3]}'
-                example_line2 = '{"type": "FUNCTION_CALL", "name": "strings_to_chars_to_int", "parameters": [\'INDIA\']}'
-                example_line3 = '{"type": "FINAL_ANSWER", "final_answer": "[42]"}'
+                example_line1 = '{"type": "FUNCTION_CALL", "name": "add", "parameters": [5, 3],"reasoning_type":"arithmetic"}}'
+                example_line2 = '{"type": "FUNCTION_CALL", "name": "strings_to_chars_to_int", "parameters": [\'INDIA\'], "reasoning_type":"lookup"}'
+                example_line3 = '{"type": "FINAL_ANSWER", "final_answer": "[42]", "reasoning_type":"control"}'
+                example_line4 = '{"type": "FUNCTION_CALL", "name": "show_reasoning", "parameters": [["Convert \'INDIA\' to ASCII values", "Apply exponential function to each ASCII value", "Sum all exponential values", "Draw a rectangle from (200,300) to (800,800)"]], "reasoning_type": "control"}'
 
-                system_prompt = f"""You are a math agent solving problems in iterations. You have access to various mathematical tools.
 
+                system_prompt = f"""You are a mathematical reasoning agent that solves problems step by step.
+You have access to various tools.
 Available tools:
 {tools_description}
 
 You must respond with EXACTLY ONE line in one of these formats (no additional text):
 1. For function calls:
-   {function_call}
-   
+{function_call}
+
 2. For final answers:
-   {final_answer}
+{final_answer}
 
-Important:
-- When a function_call returns multiple values, you need to process all of them
-- Only give final_answer when you have completed all necessary calculations
-- Do not repeat function_call with the same parameters
+Instructions:
+- First Show the step-by-step reasoning process, then calculate and verify each step.
+- Classify each step with "reasoning_type" (e.g., "lookup", "arithmetic", "trigonometric", "geometric", "string", "drawing", "control").
+- Verify each result before using it. If a function output looks incorrect or out of expected range, repeat the call or choose an alternative.
+- Before returning the final answer, re-calculate or cross-check it using a second method or sanity-check (e.g., check ranges, signs, or consistency).
+- If a tool fails or returns an unexpected value, fallback to:
+    - Retry with adjusted parameters (if possible),
+    - Skip the step and note "reasoning_type": "fallback",
+    - Or return a partial result with "final_answer": "UNKNOWN" and "reasoning_type": "error_handling".
 
-Examples:
+Output Rules:
+- Your entire response should be a single line JSON format, no newlines or spaces.
+- Do not repeat function_call with the same parameters unless verifying.
+- Do not include any explanations or additional text.
+
+Format Examples:
 - {example_line1}
 - {example_line2}
 - {example_line3}
-
-DO NOT include any explanations or additional text.
-Your entire response should be a single line JSON format , no newlines or spaces"""
+- {example_line4}
+"""
 
                 query = """Find the ASCII values of characters in INDIA and then return sum of exponentials of those values. Once this is done, Inside MSPaint app, draw a rectangle (200,300,800,800) and write the final answer inside this rectangle."""
-
-                print("Starting iteration loop...")
-                
+              
                 # Use global iteration variables
                 global iteration, last_response
                 
@@ -162,7 +170,7 @@ Your entire response should be a single line JSON format , no newlines or spaces
                     # Get model's response with timeout
                     print("Preparing to generate LLM response...")
                     prompt = f"{system_prompt}\n\nQuery: {current_query}\n\nWhat should I do next ? "
-                    print(f"Prompt: {prompt}")
+                    #print(f"Prompt: {prompt}")
                     try:
                         response = await generate_with_timeout(client, prompt)
                         response_text = json.loads(response.text.strip())
@@ -175,10 +183,10 @@ Your entire response should be a single line JSON format , no newlines or spaces
                     if response_text['type'] == "FUNCTION_CALL":
                         func_name = response_text['name']
                         params = response_text['parameters']
-                        
+
                         print(f"DEBUG: Function name: {func_name}")
                         print(f"DEBUG: Parameters: {params}")
-                        
+
                         try:
                             # Find the matching tool to get its input schema
                             tool = next((t for t in tools if t.name == func_name), None)
@@ -192,7 +200,6 @@ Your entire response should be a single line JSON format , no newlines or spaces
                             # Prepare arguments according to the tool's input schema
                             arguments = {}
                             schema_properties = tool.inputSchema.get('properties', {})
-                            print(f"DEBUG: Schema properties: {schema_properties}")
 
                             for param_name, param_info in schema_properties.items():
                                 if not params:  # Check if we have enough parameters
@@ -210,10 +217,19 @@ Your entire response should be a single line JSON format , no newlines or spaces
                                     arguments[param_name] = float(value)
                                 elif param_type == 'array':
                                     # Handle array input
-                                    print(f"DEBUG: Converting string to array: {value}")
                                     if isinstance(value, str):
                                         value = value.strip('[]')
-                                    arguments[param_name] = [int(x) for x in value]
+                                        elements = value.split(',')
+                                        parsed_array = []
+                                        for x in elements:
+                                            x = x.strip()
+                                            try:
+                                                parsed_array.append(int(x))
+                                            except ValueError:
+                                                parsed_array.append(x)
+                                        value = parsed_array
+
+                                    arguments[param_name] = value
                                 else:
                                     arguments[param_name] = str(value)
 
